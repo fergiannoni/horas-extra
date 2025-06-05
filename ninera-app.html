@@ -121,11 +121,22 @@
                         const unsubscribe = onSnapshot(workHistoryRef, (doc) => {
                             if (doc.exists() && doc.data().history) {
                                 const newHistory = doc.data().history;
-                                setWorkHistory(newHistory);
+                                
+                                // Normalizar los datos para compatibilidad entre formatos
+                                const normalizedHistory = newHistory.map(record => ({
+                                    ...record,
+                                    entryTime: record.entryTime || record.startTime,
+                                    exitTime: record.exitTime || record.endTime,
+                                    // Mantener también los campos originales para compatibilidad
+                                    startTime: record.startTime || record.entryTime,
+                                    endTime: record.endTime || record.exitTime
+                                }));
+                                
+                                setWorkHistory(normalizedHistory);
                                 
                                 // Actualizar registro de hoy
                                 const today = new Date().toISOString().split('T')[0];
-                                const todayEntry = newHistory.find(record => record.date === today);
+                                const todayEntry = normalizedHistory.find(record => record.date === today);
                                 setTodayRecord(todayEntry || null);
                                 
                                 console.log('🔄 Datos sincronizados desde otro dispositivo');
@@ -194,11 +205,21 @@
                         }
                     }
                     
-                    setWorkHistory(history);
+                    // Normalizar los datos para compatibilidad entre formatos
+                    const normalizedHistory = history.map(record => ({
+                        ...record,
+                        entryTime: record.entryTime || record.startTime,
+                        exitTime: record.exitTime || record.endTime,
+                        // Mantener también los campos originales para compatibilidad
+                        startTime: record.startTime || record.entryTime,
+                        endTime: record.endTime || record.exitTime
+                    }));
+                    
+                    setWorkHistory(normalizedHistory);
                     
                     // Buscar registro de hoy
                     const today = new Date().toISOString().split('T')[0];
-                    const todayEntry = history.find(record => record.date === today);
+                    const todayEntry = normalizedHistory.find(record => record.date === today);
                     setTodayRecord(todayEntry || null);
                     
                 } catch (error) {
@@ -208,14 +229,24 @@
 
             const saveData = async (newHistory, showMessage = true) => {
                 try {
+                    // Asegurar compatibilidad entre formatos antes de guardar
+                    const compatibleHistory = newHistory.map(record => ({
+                        ...record,
+                        // Guardar con ambos formatos para máxima compatibilidad
+                        entryTime: record.entryTime || record.startTime,
+                        exitTime: record.exitTime || record.endTime,
+                        startTime: record.startTime || record.entryTime,
+                        endTime: record.endTime || record.exitTime
+                    }));
+                    
                     // Guardar en localStorage como fallback
-                    localStorage.setItem('nannyWorkHistory', JSON.stringify(newHistory));
+                    localStorage.setItem('nannyWorkHistory', JSON.stringify(compatibleHistory));
                     
                     // Guardar en Firebase
                     if (window.db) {
                         const { doc, setDoc } = window.firestore;
                         await setDoc(doc(window.db, 'companies', COMPANY_ID, 'workHistory', 'data'), {
-                            history: newHistory,
+                            history: compatibleHistory,
                             lastUpdated: new Date().toISOString()
                         });
                         
@@ -341,7 +372,7 @@
                             
                             <button
                                 onClick={() => handleMarkTime('exit')}
-                                disabled={!todayRecord?.entryTime}
+                                disabled={!(todayRecord?.entryTime || todayRecord?.startTime)}
                                 className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed text-white text-xl font-bold py-8 px-6 rounded-2xl shadow-lg transform hover:scale-105 disabled:transform-none transition-all duration-200 flex items-center justify-center gap-3"
                             >
                                 <i className="fas fa-sign-out-alt text-2xl"></i>
@@ -360,14 +391,14 @@
                                 <div className="text-center p-4 bg-green-50 rounded-xl">
                                     <div className="text-green-600 text-lg font-semibold mb-1">Entrada</div>
                                     <div className="text-2xl font-bold text-gray-800">
-                                        {todayRecord?.entryTime || '--:--'}
+                                        {todayRecord?.entryTime || todayRecord?.startTime || '--:--'}
                                     </div>
                                 </div>
                                 
                                 <div className="text-center p-4 bg-blue-50 rounded-xl">
                                     <div className="text-blue-600 text-lg font-semibold mb-1">Salida</div>
                                     <div className="text-2xl font-bold text-gray-800">
-                                        {todayRecord?.exitTime || '--:--'}
+                                        {todayRecord?.exitTime || todayRecord?.endTime || '--:--'}
                                     </div>
                                 </div>
                                 
@@ -406,18 +437,18 @@
                                             </tr>
                                         ) : (
                                             workHistory.slice().reverse().map((record, index) => (
-                                                <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
-                                                    <td className="py-3 px-2">{formatDate(record.date)}</td>
-                                                    <td className="py-3 px-2 font-medium text-green-600">
-                                                        {record.entryTime || '--:--'}
-                                                    </td>
-                                                    <td className="py-3 px-2 font-medium text-blue-600">
-                                                        {record.exitTime || '--:--'}
-                                                    </td>
-                                                    <td className="py-3 px-2 font-bold text-purple-600">
-                                                        {record.overtimeHours || 0}h
-                                                    </td>
-                                                </tr>
+                                                                                                 <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                                                     <td className="py-3 px-2">{formatDate(record.date)}</td>
+                                                     <td className="py-3 px-2 font-medium text-green-600">
+                                                         {record.entryTime || record.startTime || '--:--'}
+                                                     </td>
+                                                     <td className="py-3 px-2 font-medium text-blue-600">
+                                                         {record.exitTime || record.endTime || '--:--'}
+                                                     </td>
+                                                     <td className="py-3 px-2 font-bold text-purple-600">
+                                                         {record.overtimeHours || 0}h
+                                                     </td>
+                                                 </tr>
                                             ))
                                         )}
                                     </tbody>
