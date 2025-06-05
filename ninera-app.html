@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Horas Extra</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, doc, setDoc, getDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        
+        // Tu configuración de Firebase (debe ser la misma que en index.html)
+        const firebaseConfig = {
+            apiKey: "AIzaSyBZE1ms1CR0UmfHvPwjTxAycwGppDG1XjY",
+            authDomain: "horasextrahilda.firebaseapp.com",
+            projectId: "horasextrahilda",
+            storageBucket: "horasextrahilda.firebasestorage.app",
+            messagingSenderId: "1027854525027",
+            appId: "1:1027854525027:web:188edd98d2e654f44d4e56"
+        };
+        
+        // Inicializar Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        
+        // Hacer disponibles globalmente
+        window.db = db;
+        window.firestore = { doc, setDoc, getDoc, onSnapshot };
+    </script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gradient-to-br from-purple-50 to-blue-50 min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Modal de confirmación
+        const ConfirmationModal = ({ isOpen, onClose, onConfirm, type, time }) => {
+            if (!isOpen) return null;
+
+            const isEntry = type === 'entry';
+            const title = isEntry ? 'Confirmar Entrada' : 'Confirmar Salida';
+            const message = isEntry ? '¿Confirmas tu hora de entrada?' : '¿Confirmas tu hora de salida?';
+            const buttonColor = isEntry ? 'bg-green-500 hover:bg-green-600' : 'bg-blue-500 hover:bg-blue-600';
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200">
+                        <div className="text-center">
+                            <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4 ${isEntry ? 'bg-green-100' : 'bg-blue-100'}`}>
+                                <i className={`text-2xl ${isEntry ? 'fas fa-sign-in-alt text-green-500' : 'fas fa-sign-out-alt text-blue-500'}`}></i>
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-800 mb-2">{title}</h3>
+                            <p className="text-gray-600 mb-4">{message}</p>
+                            <div className="text-3xl font-bold text-gray-800 mb-6">
+                                {time}
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={onClose}
+                                    className="flex-1 px-4 py-3 bg-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-300 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={onConfirm}
+                                    className={`flex-1 px-4 py-3 text-white rounded-xl font-semibold transition-colors ${buttonColor}`}
+                                >
+                                    Confirmar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Componente principal
+        const NannyApp = () => {
+            const [currentTime, setCurrentTime] = useState(new Date());
+            const [todayRecord, setTodayRecord] = useState(null);
+            const [workHistory, setWorkHistory] = useState([]);
+            const [modalOpen, setModalOpen] = useState(false);
+            const [modalType, setModalType] = useState('');
+
+            // Actualizar hora cada segundo
+            useEffect(() => {
+                const timer = setInterval(() => {
+                    setCurrentTime(new Date());
+                }, 1000);
+                return () => clearInterval(timer);
+            }, []);
+
+            // Cargar datos al iniciar y configurar sincronización
+            useEffect(() => {
+                loadData();
+                
+                // Configurar sincronización en tiempo real después de un pequeño delay
+                const timer = setTimeout(() => {
+                    if (window.db && window.firestore.onSnapshot) {
+                        const { doc, onSnapshot } = window.firestore;
+                        const workHistoryRef = doc(window.db, 'companies', COMPANY_ID, 'workHistory', 'data');
+                        
+                        const unsubscribe = onSnapshot(workHistoryRef, (doc) => {
+                            if (doc.exists() && doc.data().history) {
+                                const newHistory = doc.data().history;
+                                setWorkHistory(newHistory);
+                                
+                                // Actualizar registro de hoy
+                                const today = new Date().toISOString().split('T')[0];
+                                const todayEntry = newHistory.find(record => record.date === today);
+                                setTodayRecord(todayEntry || null);
+                                
+                                console.log('🔄 Datos sincronizados desde otro dispositivo');
+                            }
+                        });
+                        
+                        // Sincronizar configuración de sueldo
+                        const salaryConfigRef = doc(window.db, 'companies', COMPANY_ID, 'salaryConfig', 'data');
+                        const unsubscribeSalary = onSnapshot(salaryConfigRef, (doc) => {
+                            if (doc.exists()) {
+                                setSalaryConfig(doc.data());
+                                console.log('🔄 Configuración sincronizada desde otro dispositivo');
+                            }
+                        });
+                        
+                        // Limpiar los listeners cuando el componente se desmonte
+                        return () => {
+                            unsubscribe();
+                            unsubscribeSalary();
+                        };
+                    }
+                }, 1000);
+                
+                return () => clearTimeout(timer);
+            }, []);
+
+            const COMPANY_ID = 'empresa_giannoni'; // Debe ser el mismo ID que en la app principal
+            
+            const loadData = async () => {
+                try {
+                    let history = [];
+                    
+                    // Cargar configuración de sueldo
+                    if (window.db) {
+                        const { doc, getDoc } = window.firestore;
+                        const salaryConfigRef = doc(window.db, 'companies', COMPANY_ID, 'salaryConfig', 'data');
+                        const salaryConfigSnap = await getDoc(salaryConfigRef);
+                        
+                        if (salaryConfigSnap.exists()) {
+                            setSalaryConfig(salaryConfigSnap.data());
+                        }
+                    }
+                    
+                    // Intentar cargar desde Firebase
+                    if (window.db) {
+                        const { doc, getDoc } = window.firestore;
+                        const docRef = doc(window.db, 'companies', COMPANY_ID, 'workHistory', 'data');
+                        const docSnap = await getDoc(docRef);
+                        
+                        if (docSnap.exists() && docSnap.data().history) {
+                            history = docSnap.data().history;
+                            console.log('✅ Datos cargados desde Firebase');
+                        }
+                    }
+                    
+                    // Fallback a localStorage si Firebase no está disponible
+                    if (history.length === 0) {
+                        const stored = localStorage.getItem('nannyWorkHistory');
+                        if (stored) {
+                            history = JSON.parse(stored);
+                            
+                            // Migrar a Firebase si está disponible
+                            if (window.db) {
+                                await saveData(history, false);
+                            }
+                        }
+                    }
+                    
+                    setWorkHistory(history);
+                    
+                    // Buscar registro de hoy
+                    const today = new Date().toISOString().split('T')[0];
+                    const todayEntry = history.find(record => record.date === today);
+                    setTodayRecord(todayEntry || null);
+                    
+                } catch (error) {
+                    console.error('Error loading data:', error);
+                }
+            };
+
+            const saveData = async (newHistory, showMessage = true) => {
+                try {
+                    // Guardar en localStorage como fallback
+                    localStorage.setItem('nannyWorkHistory', JSON.stringify(newHistory));
+                    
+                    // Guardar en Firebase
+                    if (window.db) {
+                        const { doc, setDoc } = window.firestore;
+                        await setDoc(doc(window.db, 'companies', COMPANY_ID, 'workHistory', 'data'), {
+                            history: newHistory,
+                            lastUpdated: new Date().toISOString()
+                        });
+                        
+                        if (showMessage) {
+                            console.log('✅ Datos guardados en Firebase');
+                        }
+                    }
+                    
+                } catch (error) {
+                    console.error('Error saving data:', error);
+                }
+            };
+
+            const [salaryConfig, setSalaryConfig] = useState({ normalHours: 8 });
+            
+            const calculateHours = (entryTime, exitTime) => {
+                if (!entryTime || !exitTime) return { totalHours: 0, overtimeHours: 0 };
+                
+                const entry = new Date(`1970-01-01T${entryTime}:00`);
+                const exit = new Date(`1970-01-01T${exitTime}:00`);
+                const diffMs = exit - entry;
+                const totalHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
+                const normalHours = salaryConfig.normalHours || 8;
+                const overtimeHours = Math.max(0, totalHours - normalHours);
+                
+                return { totalHours, overtimeHours: Math.round(overtimeHours * 100) / 100 };
+            };
+
+            const handleMarkTime = (type) => {
+                setModalType(type);
+                setModalOpen(true);
+            };
+
+            const confirmMarkTime = async () => {
+                const now = new Date();
+                const today = now.toISOString().split('T')[0];
+                const currentTimeString = now.toTimeString().slice(0, 5);
+                
+                let updatedHistory = [...workHistory];
+                let updatedRecord = todayRecord || { date: today, entryTime: '', exitTime: '' };
+
+                if (modalType === 'entry') {
+                    updatedRecord.entryTime = currentTimeString;
+                    updatedRecord.exitTime = ''; // Reset exit time if marking new entry
+                } else {
+                    updatedRecord.exitTime = currentTimeString;
+                }
+
+                // Calcular horas
+                const hours = calculateHours(updatedRecord.entryTime, updatedRecord.exitTime);
+                updatedRecord.totalHours = hours.totalHours;
+                updatedRecord.overtimeHours = hours.overtimeHours;
+
+                // Actualizar historial
+                const existingIndex = updatedHistory.findIndex(record => record.date === today);
+                if (existingIndex >= 0) {
+                    updatedHistory[existingIndex] = updatedRecord;
+                } else {
+                    updatedHistory.push(updatedRecord);
+                }
+
+                updatedHistory.sort((a, b) => new Date(a.date) - new Date(b.date));
+                
+                setWorkHistory(updatedHistory);
+                setTodayRecord(updatedRecord);
+                await saveData(updatedHistory);
+                setModalOpen(false);
+            };
+
+            const formatTime = (time) => {
+                return time.toLocaleTimeString('es-AR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                });
+            };
+
+            const formatDate = (dateString) => {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('es-AR', {
+                    weekday: 'short',
+                    day: 'numeric',
+                    month: 'short'
+                });
+            };
+
+            return (
+                <div className="min-h-screen p-4">
+                    <div className="max-w-4xl mx-auto">
+                        {/* Header */}
+                        <div className="text-center mb-8">
+                            <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">
+                                <i className="fas fa-clock text-blue-500 mr-3"></i>
+                                Registro de Horas Extra
+                            </h1>
+                            
+                            {/* Reloj */}
+                            <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
+                                <div className="text-5xl md:text-6xl font-bold text-gray-800 mb-2">
+                                    {formatTime(currentTime)}
+                                </div>
+                                <div className="text-lg text-gray-600">
+                                    {currentTime.toLocaleDateString('es-AR', {
+                                        weekday: 'long',
+                                        year: 'numeric',
+                                        month: 'long',
+                                        day: 'numeric'
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Botones principales */}
+                        <div className="grid md:grid-cols-2 gap-4 mb-8">
+                            <button
+                                onClick={() => handleMarkTime('entry')}
+                                className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white text-xl font-bold py-8 px-6 rounded-2xl shadow-lg transform hover:scale-105 transition-all duration-200 flex items-center justify-center gap-3"
+                            >
+                                <i className="fas fa-sign-in-alt text-2xl"></i>
+                                Marcar Entrada
+                            </button>
+                            
+                            <button
+                                onClick={() => handleMarkTime('exit')}
+                                disabled={!todayRecord?.entryTime}
+                                className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed text-white text-xl font-bold py-8 px-6 rounded-2xl shadow-lg transform hover:scale-105 disabled:transform-none transition-all duration-200 flex items-center justify-center gap-3"
+                            >
+                                <i className="fas fa-sign-out-alt text-2xl"></i>
+                                Marcar Salida
+                            </button>
+                        </div>
+
+                        {/* Resumen del día */}
+                        <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
+                            <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                <i className="fas fa-calendar-day text-purple-500"></i>
+                                Resumen de Hoy
+                            </h2>
+                            
+                            <div className="grid md:grid-cols-3 gap-4">
+                                <div className="text-center p-4 bg-green-50 rounded-xl">
+                                    <div className="text-green-600 text-lg font-semibold mb-1">Entrada</div>
+                                    <div className="text-2xl font-bold text-gray-800">
+                                        {todayRecord?.entryTime || '--:--'}
+                                    </div>
+                                </div>
+                                
+                                <div className="text-center p-4 bg-blue-50 rounded-xl">
+                                    <div className="text-blue-600 text-lg font-semibold mb-1">Salida</div>
+                                    <div className="text-2xl font-bold text-gray-800">
+                                        {todayRecord?.exitTime || '--:--'}
+                                    </div>
+                                </div>
+                                
+                                <div className="text-center p-4 bg-purple-50 rounded-xl">
+                                    <div className="text-purple-600 text-lg font-semibold mb-1">Horas Extra</div>
+                                    <div className="text-2xl font-bold text-gray-800">
+                                        {todayRecord?.overtimeHours || 0}h
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Historial */}
+                        <div className="bg-white rounded-2xl shadow-lg p-6">
+                            <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                <i className="fas fa-history text-purple-500"></i>
+                                Historial de Trabajo
+                            </h2>
+                            
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="border-b border-gray-200">
+                                            <th className="text-left py-3 px-2 font-semibold text-gray-700">Fecha</th>
+                                            <th className="text-left py-3 px-2 font-semibold text-gray-700">Entrada</th>
+                                            <th className="text-left py-3 px-2 font-semibold text-gray-700">Salida</th>
+                                            <th className="text-left py-3 px-2 font-semibold text-gray-700">Horas Extra</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {workHistory.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="4" className="text-center py-8 text-gray-500 italic">
+                                                    No hay registros aún
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            workHistory.slice().reverse().map((record, index) => (
+                                                <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                                                    <td className="py-3 px-2">{formatDate(record.date)}</td>
+                                                    <td className="py-3 px-2 font-medium text-green-600">
+                                                        {record.entryTime || '--:--'}
+                                                    </td>
+                                                    <td className="py-3 px-2 font-medium text-blue-600">
+                                                        {record.exitTime || '--:--'}
+                                                    </td>
+                                                    <td className="py-3 px-2 font-bold text-purple-600">
+                                                        {record.overtimeHours || 0}h
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Modal de confirmación */}
+                    <ConfirmationModal
+                        isOpen={modalOpen}
+                        onClose={() => setModalOpen(false)}
+                        onConfirm={confirmMarkTime}
+                        type={modalType}
+                        time={formatTime(currentTime)}
+                    />
+                </div>
+            );
+        };
+
+        // Renderizar la aplicación
+        ReactDOM.render(<NannyApp />, document.getElementById('root'));
+    </script>
+</body>
+</html> 

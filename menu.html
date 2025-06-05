@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Control de Horas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <div class="max-w-4xl mx-auto">
+            <!-- Header -->
+            <div class="text-center mb-12">
+                <h1 class="text-4xl md:text-5xl font-bold text-gray-800 mb-4">
+                    <i class="fas fa-clock text-blue-500 mr-3"></i>
+                    Sistema de Control de Horas
+                </h1>
+                <p class="text-xl text-gray-600">
+                    Gestión completa de horarios y sueldos
+                </p>
+            </div>
+
+            <!-- Aplicaciones -->
+            <div class="grid md:grid-cols-2 gap-8 mb-12">
+                <!-- Aplicación del Empleador -->
+                <div class="bg-white rounded-2xl shadow-xl p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2">
+                    <div class="text-center">
+                        <div class="bg-gradient-to-r from-purple-100 to-blue-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <i class="fas fa-user-tie text-3xl text-purple-600"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold text-gray-800 mb-4">
+                            Panel del Empleador
+                        </h2>
+                        <p class="text-gray-600 mb-6">
+                            Administra la configuración de sueldos, revisa el historial completo y calcula los pagos mensuales.
+                        </p>
+                        <div class="space-y-3 mb-6">
+                            <div class="flex items-center text-sm text-gray-600">
+                                <i class="fas fa-check text-green-500 mr-2"></i>
+                                Configuración de sueldos y horas extras
+                            </div>
+                            <div class="flex items-center text-sm text-gray-600">
+                                <i class="fas fa-check text-green-500 mr-2"></i>
+                                Resumen mensual automático
+                            </div>
+                            <div class="flex items-center text-sm text-gray-600">
+                                <i class="fas fa-check text-green-500 mr-2"></i>
+                                Historial completo con filtros
+                            </div>
+                            <div class="flex items-center text-sm text-gray-600">
+                                <i class="fas fa-check text-green-500 mr-2"></i>
+                                Cálculo automático de pagos
+                            </div>
+                        </div>
+                        <a href="index.html" class="block w-full bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white font-bold py-4 px-6 rounded-xl transition-all duration-200 transform hover:scale-105">
+                            <i class="fas fa-external-link-alt mr-2"></i>
+                            Abrir Panel del Empleador
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Aplicación de la Niñera -->
+                <div class="bg-white rounded-2xl shadow-xl p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2">
+                    <div class="text-center">
+                        <div class="bg-gradient-to-r from-blue-100 to-purple-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <i class="fas fa-clock text-3xl text-blue-600"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold text-gray-800 mb-4">
+                            Registro de Horas Extra
+                        </h2>
+                        <p class="text-gray-600 mb-6">
+                            Interfaz simple para que el empleado registre sus horas de entrada y salida diariamente.
+                        </p>
+                        <div class="space-y-3 mb-6">
+                            <div class="flex items-center text-sm text-gray-600">
+                                <i class="fas fa-check text-green-500 mr-2"></i>
+                                Reloj en tiempo real
+                            </div>
+                            <div class="flex items-center text-sm text-gray-600">
+                                <i class="fas fa-check text-green-500 mr-2"></i>
+                                Botones grandes y fáciles de usar
+                            </div>
+                            <div class="flex items-center text-sm text-gray-600">
+                                <i class="fas fa-check text-green-500 mr-2"></i>
+                                Confirmación antes de registrar
+                            </div>
+                            <div class="flex items-center text-sm text-gray-600">
+                                <i class="fas fa-check text-green-500 mr-2"></i>
+                                Sincronización automática
+                            </div>
+                        </div>
+                        <a href="ninera-app.html" class="block w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white font-bold py-4 px-6 rounded-xl transition-all duration-200 transform hover:scale-105">
+                            <i class="fas fa-external-link-alt mr-2"></i>
+                            Abrir Registro de Horas Extra
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Información adicional -->
+            <div class="bg-white rounded-2xl shadow-lg p-8">
+                <h3 class="text-2xl font-bold text-gray-800 mb-6 text-center">
+                    <i class="fas fa-info-circle text-blue-500 mr-2"></i>
+                    Cómo Funciona el Sistema
+                </h3>
+                
+                <div class="grid md:grid-cols-3 gap-6">
+                    <div class="text-center">
+                        <div class="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span class="text-2xl font-bold text-green-600">1</span>
+                        </div>
+                        <h4 class="font-semibold text-gray-800 mb-2">Configuración Inicial</h4>
+                        <p class="text-sm text-gray-600">
+                            El empleador configura el sueldo base y el valor de las horas extras en su panel.
+                        </p>
+                    </div>
+                    
+                    <div class="text-center">
+                        <div class="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span class="text-2xl font-bold text-blue-600">2</span>
+                        </div>
+                        <h4 class="font-semibold text-gray-800 mb-2">Registro Diario</h4>
+                        <p class="text-sm text-gray-600">
+                            El empleado usa su aplicación para marcar entrada y salida cada día de trabajo.
+                        </p>
+                    </div>
+                    
+                    <div class="text-center">
+                        <div class="bg-purple-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span class="text-2xl font-bold text-purple-600">3</span>
+                        </div>
+                        <h4 class="font-semibold text-gray-800 mb-2">Cálculo Automático</h4>
+                        <p class="text-sm text-gray-600">
+                            El sistema calcula automáticamente las horas extras y el sueldo total del mes.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="text-center mt-8 text-gray-500">
+                <p>
+                    <i class="fas fa-shield-alt mr-1"></i>
+                    Sistema seguro con almacenamiento local - No se envían datos a servidores externos
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html> 
