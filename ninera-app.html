@@ -123,19 +123,34 @@
                                 const newHistory = doc.data().history;
                                 
                                 // Normalizar los datos para compatibilidad entre formatos
-                                const normalizedHistory = newHistory.map(record => ({
-                                    ...record,
-                                    entryTime: record.entryTime || record.startTime,
-                                    exitTime: record.exitTime || record.endTime,
-                                    // Mantener también los campos originales para compatibilidad
-                                    startTime: record.startTime || record.entryTime,
-                                    endTime: record.endTime || record.exitTime
-                                }));
+                                const normalizedHistory = newHistory.map(record => {
+                                    const normalized = {
+                                        ...record,
+                                        entryTime: record.entryTime || record.startTime,
+                                        exitTime: record.exitTime || record.endTime,
+                                        // Mantener también los campos originales para compatibilidad
+                                        startTime: record.startTime || record.entryTime,
+                                        endTime: record.endTime || record.exitTime
+                                    };
+                                    
+                                    // Recalcular horas extra con nueva lógica de fin de semana
+                                    if (normalized.entryTime && normalized.exitTime) {
+                                        const hours = calculateHours(normalized.entryTime, normalized.exitTime, record.date);
+                                        normalized.totalHours = hours.totalHours;
+                                        normalized.overtimeHours = hours.overtimeHours;
+                                    }
+                                    
+                                    return normalized;
+                                });
                                 
                                 setWorkHistory(normalizedHistory);
                                 
                                 // Actualizar registro de hoy
-                                const today = new Date().toISOString().split('T')[0];
+                                const now = new Date();
+                                const year = now.getFullYear();
+                                const month = String(now.getMonth() + 1).padStart(2, '0');
+                                const day = String(now.getDate()).padStart(2, '0');
+                                const today = `${year}-${month}-${day}`;
                                 const todayEntry = normalizedHistory.find(record => record.date === today);
                                 setTodayRecord(todayEntry || null);
                                 
@@ -206,19 +221,34 @@
                     }
                     
                     // Normalizar los datos para compatibilidad entre formatos
-                    const normalizedHistory = history.map(record => ({
-                        ...record,
-                        entryTime: record.entryTime || record.startTime,
-                        exitTime: record.exitTime || record.endTime,
-                        // Mantener también los campos originales para compatibilidad
-                        startTime: record.startTime || record.entryTime,
-                        endTime: record.endTime || record.exitTime
-                    }));
+                    const normalizedHistory = history.map(record => {
+                        const normalized = {
+                            ...record,
+                            entryTime: record.entryTime || record.startTime,
+                            exitTime: record.exitTime || record.endTime,
+                            // Mantener también los campos originales para compatibilidad
+                            startTime: record.startTime || record.entryTime,
+                            endTime: record.endTime || record.exitTime
+                        };
+                        
+                        // Recalcular horas extra con nueva lógica de fin de semana
+                        if (normalized.entryTime && normalized.exitTime) {
+                            const hours = calculateHours(normalized.entryTime, normalized.exitTime, record.date);
+                            normalized.totalHours = hours.totalHours;
+                            normalized.overtimeHours = hours.overtimeHours;
+                        }
+                        
+                        return normalized;
+                    });
                     
                     setWorkHistory(normalizedHistory);
                     
                     // Buscar registro de hoy
-                    const today = new Date().toISOString().split('T')[0];
+                    const now = new Date();
+                    const year = now.getFullYear();
+                    const month = String(now.getMonth() + 1).padStart(2, '0');
+                    const day = String(now.getDate()).padStart(2, '0');
+                    const today = `${year}-${month}-${day}`;
                     const todayEntry = normalizedHistory.find(record => record.date === today);
                     setTodayRecord(todayEntry || null);
                     
@@ -262,15 +292,31 @@
 
             const [salaryConfig, setSalaryConfig] = useState({ normalHours: 8 });
             
-            const calculateHours = (entryTime, exitTime) => {
+            const calculateHours = (entryTime, exitTime, workDate) => {
                 if (!entryTime || !exitTime) return { totalHours: 0, overtimeHours: 0 };
                 
                 const entry = new Date(`1970-01-01T${entryTime}:00`);
                 const exit = new Date(`1970-01-01T${exitTime}:00`);
                 const diffMs = exit - entry;
                 const totalHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
-                const normalHours = salaryConfig.normalHours || 8;
-                const overtimeHours = Math.max(0, totalHours - normalHours);
+                
+                // Verificar si es fin de semana (sábado=6, domingo=0)
+                let isWeekend = false;
+                if (workDate) {
+                    const [year, month, day] = workDate.split('-');
+                    const dateObj = new Date(year, month - 1, day);
+                    isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+                }
+                
+                let overtimeHours;
+                if (isWeekend) {
+                    // Fin de semana: todas las horas son extra
+                    overtimeHours = totalHours;
+                } else {
+                    // Día de semana: usar lógica normal
+                    const normalHours = salaryConfig.normalHours || 8;
+                    overtimeHours = Math.max(0, totalHours - normalHours);
+                }
                 
                 return { totalHours, overtimeHours: Math.round(overtimeHours * 100) / 100 };
             };
@@ -282,7 +328,11 @@
 
             const confirmMarkTime = async () => {
                 const now = new Date();
-                const today = now.toISOString().split('T')[0];
+                // Usar fecha local en lugar de UTC
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const today = `${year}-${month}-${day}`;
                 const currentTimeString = now.toTimeString().slice(0, 5);
                 
                 let updatedHistory = [...workHistory];
@@ -296,7 +346,7 @@
                 }
 
                 // Calcular horas
-                const hours = calculateHours(updatedRecord.entryTime, updatedRecord.exitTime);
+                const hours = calculateHours(updatedRecord.entryTime, updatedRecord.exitTime, today);
                 updatedRecord.totalHours = hours.totalHours;
                 updatedRecord.overtimeHours = hours.overtimeHours;
 
@@ -326,7 +376,9 @@
             };
 
             const formatDate = (dateString) => {
-                const date = new Date(dateString);
+                // Evitar problemas de timezone creando la fecha de forma local
+                const [year, month, day] = dateString.split('-');
+                const date = new Date(year, month - 1, day);
                 return date.toLocaleDateString('es-AR', {
                     weekday: 'short',
                     day: 'numeric',
