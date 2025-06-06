@@ -89,7 +89,11 @@ function initializeEventListeners() {
 // Establecer fecha por defecto
 function setDefaultDate() {
     const today = new Date();
-    const dateString = today.toISOString().split('T')[0];
+    // Asegurar que usamos la zona horaria local
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const dateString = `${year}-${month}-${day}`;
     document.getElementById('workDate').value = dateString;
 }
 
@@ -211,7 +215,7 @@ async function addWorkDay() {
         startTime: startTime,
         endTime: endTime,
         totalHours: calculateTotalHours(startTime, endTime),
-        overtimeHours: calculateOvertimeHours(startTime, endTime)
+        overtimeHours: calculateOvertimeHours(startTime, endTime, workDate)
     };
     
     workHistory.push(workDay);
@@ -238,10 +242,27 @@ function calculateTotalHours(startTime, endTime) {
 }
 
 // Calcular horas extras
-function calculateOvertimeHours(startTime, endTime) {
+function calculateOvertimeHours(startTime, endTime, workDate) {
     const totalHours = calculateTotalHours(startTime, endTime);
-    const normalHours = salaryConfig.normalHours || 8;
-    const overtimeHours = Math.max(0, totalHours - normalHours);
+    
+    // Verificar si es fin de semana (sábado=6, domingo=0)
+    let isWeekend = false;
+    if (workDate) {
+        const [year, month, day] = workDate.split('-');
+        const dateObj = new Date(year, month - 1, day);
+        isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+    }
+    
+    let overtimeHours;
+    if (isWeekend) {
+        // Fin de semana: todas las horas son extra
+        overtimeHours = totalHours;
+    } else {
+        // Día de semana: usar lógica normal
+        const normalHours = salaryConfig.normalHours || 8;
+        overtimeHours = Math.max(0, totalHours - normalHours);
+    }
+    
     return Math.round(overtimeHours * 100) / 100;
 }
 
@@ -257,7 +278,9 @@ function updateMonthlySummary() {
     const currentYear = new Date().getFullYear();
     
     const currentMonthRecords = workHistory.filter(record => {
-        const recordDate = new Date(record.date);
+        // Evitar problemas de timezone
+        const [year, month, day] = record.date.split('-');
+        const recordDate = new Date(year, month - 1, day);
         return recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
     });
     
@@ -286,7 +309,9 @@ function updateWorkHistoryTable() {
     if (selectedMonth !== 'all') {
         const [year, month] = selectedMonth.split('-');
         filteredHistory = workHistory.filter(record => {
-            const recordDate = new Date(record.date);
+            // Evitar problemas de timezone
+            const [recordYear, recordMonth, recordDay] = record.date.split('-');
+            const recordDate = new Date(recordYear, recordMonth - 1, recordDay);
             return recordDate.getFullYear() == year && recordDate.getMonth() == (month - 1);
         });
     }
@@ -320,7 +345,9 @@ function updateWorkHistoryTable() {
 
 // Formatear fecha
 function formatDate(dateString) {
-    const date = new Date(dateString);
+    // Evitar problemas de timezone creando la fecha de forma local
+    const [year, month, day] = dateString.split('-');
+    const date = new Date(year, month - 1, day);
     return date.toLocaleDateString('es-AR', {
         weekday: 'short',
         year: 'numeric',
@@ -378,7 +405,9 @@ function populateMonthFilter() {
     const months = new Set();
     
     workHistory.forEach(record => {
-        const date = new Date(record.date);
+        // Evitar problemas de timezone
+        const [year, month, day] = record.date.split('-');
+        const date = new Date(year, month - 1, day);
         const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
         months.add(monthKey);
     });
