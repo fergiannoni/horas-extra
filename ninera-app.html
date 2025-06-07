@@ -135,7 +135,7 @@
                                     
                                     // Recalcular horas extra con nueva lógica de fin de semana
                                     if (normalized.entryTime && normalized.exitTime) {
-                                        const hours = calculateHours(normalized.entryTime, normalized.exitTime, record.date);
+                                        const hours = calculateHours(normalized.entryTime, normalized.exitTime, record.date, salaryConfig);
                                         normalized.totalHours = hours.totalHours;
                                         normalized.overtimeHours = hours.overtimeHours;
                                     }
@@ -162,8 +162,24 @@
                         const salaryConfigRef = doc(window.db, 'companies', COMPANY_ID, 'salaryConfig', 'data');
                         const unsubscribeSalary = onSnapshot(salaryConfigRef, (doc) => {
                             if (doc.exists()) {
-                                setSalaryConfig(doc.data());
+                                const newConfig = doc.data();
+                                setSalaryConfig(newConfig);
                                 console.log('🔄 Configuración sincronizada desde otro dispositivo');
+                                
+                                // Recalcular registros con nueva configuración
+                                setWorkHistory(prevHistory => 
+                                    prevHistory.map(record => {
+                                        if (record.entryTime && record.exitTime) {
+                                            const hours = calculateHours(record.entryTime, record.exitTime, record.date, newConfig);
+                                            return {
+                                                ...record,
+                                                totalHours: hours.totalHours,
+                                                overtimeHours: hours.overtimeHours
+                                            };
+                                        }
+                                        return record;
+                                    })
+                                );
                             }
                         });
                         
@@ -191,7 +207,9 @@
                         const salaryConfigSnap = await getDoc(salaryConfigRef);
                         
                         if (salaryConfigSnap.exists()) {
-                            setSalaryConfig(salaryConfigSnap.data());
+                            const newConfig = salaryConfigSnap.data();
+                            setSalaryConfig(newConfig);
+                            console.log('📋 Configuración cargada:', newConfig);
                         }
                     }
                     
@@ -233,7 +251,7 @@
                         
                         // Recalcular horas extra con nueva lógica de fin de semana
                         if (normalized.entryTime && normalized.exitTime) {
-                            const hours = calculateHours(normalized.entryTime, normalized.exitTime, record.date);
+                            const hours = calculateHours(normalized.entryTime, normalized.exitTime, record.date, salaryConfig);
                             normalized.totalHours = hours.totalHours;
                             normalized.overtimeHours = hours.overtimeHours;
                         }
@@ -292,7 +310,7 @@
 
             const [salaryConfig, setSalaryConfig] = useState({ normalHours: 8 });
             
-            const calculateHours = (entryTime, exitTime, workDate) => {
+            const calculateHours = (entryTime, exitTime, workDate, configOverride = null) => {
                 if (!entryTime || !exitTime) return { totalHours: 0, overtimeHours: 0 };
                 
                 const entry = new Date(`1970-01-01T${entryTime}:00`);
@@ -314,7 +332,8 @@
                     overtimeHours = totalHours;
                 } else {
                     // Día de semana: usar lógica normal
-                    const normalHours = salaryConfig.normalHours || 8;
+                    const config = configOverride || salaryConfig;
+                    const normalHours = config.normalHours || 8;
                     overtimeHours = Math.max(0, totalHours - normalHours);
                 }
                 
