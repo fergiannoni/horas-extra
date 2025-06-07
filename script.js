@@ -286,8 +286,23 @@ function updateMonthlySummary() {
     
     const totalDays = currentMonthRecords.length;
     const normalHours = salaryConfig.normalHours || 8;
-    const totalNormalHours = currentMonthRecords.reduce((sum, record) => 
-        sum + Math.min(record.totalHours, normalHours), 0);
+    
+    // Calcular horas normales excluyendo fines de semana
+    const totalNormalHours = currentMonthRecords.reduce((sum, record) => {
+        // Verificar si es fin de semana
+        const [year, month, day] = record.date.split('-');
+        const dateObj = new Date(year, month - 1, day);
+        const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+        
+        if (isWeekend) {
+            // Fin de semana: 0 horas normales
+            return sum;
+        } else {
+            // Día de semana: calcular horas normales
+            return sum + Math.min(record.totalHours, normalHours);
+        }
+    }, 0);
+    
     const totalOvertimeHours = currentMonthRecords.reduce((sum, record) => 
         sum + record.overtimeHours, 0);
     
@@ -491,4 +506,37 @@ function exportData() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+}
+
+// Función para debugging y recalcular registros existentes
+function debugAndRecalculateWeekends() {
+    console.log('🔍 DEPURACIÓN DE FIN DE SEMANA:');
+    
+    // Recalcular todos los registros
+    workHistory = workHistory.map(record => {
+        const oldOvertimeHours = record.overtimeHours;
+        const newOvertimeHours = calculateOvertimeHours(record.startTime, record.endTime, record.date);
+        
+        // Verificar si es fin de semana
+        const [year, month, day] = record.date.split('-');
+        const dateObj = new Date(year, month - 1, day);
+        const dayOfWeek = dateObj.getDay();
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        const dayName = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][dayOfWeek];
+        
+        console.log(`📅 ${record.date} (${dayName}): ${isWeekend ? '🏖️ FIN DE SEMANA' : '👔 Día laboral'}`);
+        console.log(`   Horas: ${record.startTime} - ${record.endTime} = ${record.totalHours}h`);
+        console.log(`   Horas extra: ${oldOvertimeHours}h → ${newOvertimeHours}h ${oldOvertimeHours !== newOvertimeHours ? '⚠️ CAMBIÓ' : '✅'}`);
+        
+        return {
+            ...record,
+            overtimeHours: newOvertimeHours
+        };
+    });
+    
+    // Guardar cambios
+    saveToFirebase('workHistory', { history: workHistory });
+    updateDisplay();
+    
+    console.log('✅ Recálculo completado');
 } 
