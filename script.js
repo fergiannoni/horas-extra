@@ -508,9 +508,15 @@ function exportData() {
     URL.revokeObjectURL(url);
 }
 
-// Función para debugging y recalcular registros existentes
-function debugAndRecalculateWeekends() {
+// Función para debugging y recalcular registros existentes (GLOBAL)
+window.debugAndRecalculateWeekends = function() {
     console.log('🔍 DEPURACIÓN DE FIN DE SEMANA:');
+    
+    if (!workHistory || workHistory.length === 0) {
+        console.log('⚠️ No hay registros en el historial');
+        alert('No hay registros para recalcular');
+        return;
+    }
     
     // Recalcular todos los registros
     workHistory = workHistory.map(record => {
@@ -535,8 +541,17 @@ function debugAndRecalculateWeekends() {
     });
     
     // Guardar cambios
-    saveToFirebase('workHistory', { history: workHistory });
-    updateDisplay();
-    
-    console.log('✅ Recálculo completado');
-} 
+    saveToFirebase('workHistory', { history: workHistory })
+        .then(() => {
+            console.log('✅ Recálculo completado y guardado');
+            updateDisplay();
+            alert('✅ Recálculo completado. Revisa la consola para ver los detalles.');
+        })
+        .catch(error => {
+            console.error('❌ Error guardando:', error);
+            alert('❌ Error al guardar los cambios');
+        });
+};
+
+// Alias corto para la consola
+window.recalcular = window.debugAndRecalculateWeekends; 
