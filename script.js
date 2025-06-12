@@ -61,6 +61,514 @@ const loadFromFirebase = async (collection) => {
     }
 };
 
+// ===== CHAT INTELIGENTE =====
+
+// Variables del chat
+let chatHistory = [];
+let isTyping = false;
+
+// Inicializar chat
+function initializeChat() {
+    const chatButton = document.getElementById('chatButton');
+    const chatModal = document.getElementById('chatModal');
+    const chatClose = document.getElementById('chatClose');
+    const chatInput = document.getElementById('chatInput');
+    const chatMessages = document.getElementById('chatMessages');
+    const suggestions = document.querySelectorAll('.suggestion-chip');
+
+    // Abrir/cerrar chat
+    chatButton.addEventListener('click', () => {
+        chatModal.classList.toggle('show');
+        chatButton.classList.toggle('active');
+        if (chatModal.classList.contains('show')) {
+            chatInput.focus();
+        }
+    });
+
+    chatClose.addEventListener('click', () => {
+        chatModal.classList.remove('show');
+        chatButton.classList.remove('active');
+    });
+
+    // Enviar mensaje con Enter
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !isTyping) {
+            const message = chatInput.value.trim();
+            if (message) {
+                sendMessage(message);
+                chatInput.value = '';
+            }
+        }
+    });
+
+    // Sugerencias de preguntas
+    suggestions.forEach(chip => {
+        chip.addEventListener('click', () => {
+            const question = chip.getAttribute('data-question');
+            sendMessage(question);
+        });
+    });
+}
+
+// Enviar mensaje
+function sendMessage(message) {
+    if (isTyping) return;
+    
+    // Agregar mensaje del usuario
+    addMessage(message, 'user');
+    
+    // Mostrar indicador de escritura
+    showTypingIndicator();
+    
+    // Procesar respuesta (simular delay)
+    setTimeout(() => {
+        const response = processMessage(message);
+        hideTypingIndicator();
+        addMessage(response.text, 'bot', response.chart);
+    }, 1000 + Math.random() * 1000); // 1-2 segundos
+}
+
+// Agregar mensaje al chat
+function addMessage(text, sender, chartData = null) {
+    const messagesContainer = document.getElementById('chatMessages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `chat-message message-${sender}`;
+    
+    let content = `<div class="message-bubble">${text}</div>`;
+    
+    // Agregar gráfico si existe
+    if (chartData) {
+        content += `<div class="chart-container">
+            <div class="mini-chart" id="chart-${Date.now()}">
+                ${generateMiniChart(chartData)}
+            </div>
+        </div>`;
+    }
+    
+    messageDiv.innerHTML = content;
+    messagesContainer.appendChild(messageDiv);
+    
+    // Scroll al final
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    
+    // Guardar en historial
+    chatHistory.push({ text, sender, timestamp: new Date() });
+}
+
+// Mostrar indicador de escritura
+function showTypingIndicator() {
+    isTyping = true;
+    const messagesContainer = document.getElementById('chatMessages');
+    const typingDiv = document.createElement('div');
+    typingDiv.className = 'chat-message message-bot';
+    typingDiv.id = 'typing-indicator';
+    typingDiv.innerHTML = `
+        <div class="message-bubble">
+            <i class="fas fa-circle" style="animation: pulse 1.5s infinite; font-size: 8px; margin-right: 5px;"></i>
+            <i class="fas fa-circle" style="animation: pulse 1.5s infinite 0.3s; font-size: 8px; margin-right: 5px;"></i>
+            <i class="fas fa-circle" style="animation: pulse 1.5s infinite 0.6s; font-size: 8px;"></i>
+        </div>
+    `;
+    messagesContainer.appendChild(typingDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+// Ocultar indicador de escritura
+function hideTypingIndicator() {
+    isTyping = false;
+    const typingIndicator = document.getElementById('typing-indicator');
+    if (typingIndicator) {
+        typingIndicator.remove();
+    }
+}
+
+// Procesar mensaje y generar respuesta
+function processMessage(message) {
+    const lowerMessage = message.toLowerCase();
+    
+    // Patrones de preguntas
+    if (lowerMessage.includes('horas extra') && lowerMessage.includes('mes')) {
+        return analyzeMonthlyOvertime();
+    }
+    
+    if (lowerMessage.includes('días') && (lowerMessage.includes('trabajó') || lowerMessage.includes('trabajo'))) {
+        return analyzeWorkDays();
+    }
+    
+    if (lowerMessage.includes('dinero') || lowerMessage.includes('pago') || lowerMessage.includes('ganó')) {
+        return analyzeEarnings();
+    }
+    
+    if (lowerMessage.includes('fin de semana') || lowerMessage.includes('sábado') || lowerMessage.includes('domingo')) {
+        return analyzeWeekends();
+    }
+    
+    if (lowerMessage.includes('día') && (lowerMessage.includes('más') || lowerMessage.includes('mayor'))) {
+        return analyzeBestDay();
+    }
+    
+    if (lowerMessage.includes('promedio')) {
+        return analyzeAverage();
+    }
+    
+    // Respuesta por defecto
+    return {
+        text: `🤔 No estoy seguro de cómo responder esa pregunta. Puedes preguntarme sobre:
+        
+        • "¿Cuántas horas extra este mes?"
+        • "¿Cuántos días trabajó?"
+        • "¿Cuánto dinero extra ganó?"
+        • "¿Trabajó fines de semana?"
+        • "¿Cuál fue su mejor día?"
+        • "¿Cuál es el promedio de horas?"`,
+        chart: null
+    };
+}
+
+// Análisis de horas extra mensuales
+function analyzeMonthlyOvertime() {
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    
+    const monthlyRecords = workHistory.filter(record => {
+        const [year, month, day] = record.date.split('-');
+        const recordDate = new Date(year, month - 1, day);
+        return recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
+    });
+    
+    const totalOvertime = monthlyRecords.reduce((sum, record) => sum + (record.overtimeHours || 0), 0);
+    const totalDays = monthlyRecords.length;
+    const averagePerDay = totalDays > 0 ? (totalOvertime / totalDays).toFixed(1) : 0;
+    
+    const monthName = new Date().toLocaleDateString('es-AR', { month: 'long' });
+    
+    return {
+        text: `📊 **Horas Extra en ${monthName}:**
+        
+        🕐 **Total:** ${totalOvertime.toFixed(1)} horas
+        📅 **Días trabajados:** ${totalDays}
+        📈 **Promedio por día:** ${averagePerDay}h
+        
+        ${totalOvertime > 0 ? '¡Excelente productividad! 💪' : 'Sin horas extra este mes 😊'}`,
+        chart: {
+            type: 'overtime-monthly',
+            data: monthlyRecords.map(r => ({ date: r.date, hours: r.overtimeHours || 0 }))
+        }
+    };
+}
+
+// Análisis de días trabajados
+function analyzeWorkDays() {
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    
+    const monthlyRecords = workHistory.filter(record => {
+        const [year, month, day] = record.date.split('-');
+        const recordDate = new Date(year, month - 1, day);
+        return recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
+    });
+    
+    const totalDays = monthlyRecords.length;
+    const daysWithOvertime = monthlyRecords.filter(r => (r.overtimeHours || 0) > 0).length;
+    const weekends = monthlyRecords.filter(r => {
+        const [year, month, day] = r.date.split('-');
+        const date = new Date(year, month - 1, day);
+        return date.getDay() === 0 || date.getDay() === 6;
+    }).length;
+    
+    const monthName = new Date().toLocaleDateString('es-AR', { month: 'long' });
+    
+    return {
+        text: `📅 **Días Trabajados en ${monthName}:**
+        
+        🗓️ **Total de días:** ${totalDays}
+        ⏰ **Días con horas extra:** ${daysWithOvertime}
+        🏖️ **Fines de semana:** ${weekends}
+        👔 **Días de semana:** ${totalDays - weekends}
+        
+        ${totalDays > 20 ? '¡Muy buen mes de trabajo! 🌟' : 'Mes tranquilo 😌'}`,
+        chart: {
+            type: 'work-days',
+            data: { total: totalDays, overtime: daysWithOvertime, weekends }
+        }
+    };
+}
+
+// Análisis de ganancias
+function analyzeEarnings() {
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    
+    const monthlyRecords = workHistory.filter(record => {
+        const [year, month, day] = record.date.split('-');
+        const recordDate = new Date(year, month - 1, day);
+        return recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
+    });
+    
+    const totalOvertime = monthlyRecords.reduce((sum, record) => sum + (record.overtimeHours || 0), 0);
+    const extraMoney = totalOvertime * (salaryConfig.overtimeRate || 0);
+    const totalSalary = (salaryConfig.baseSalary || 0) + extraMoney;
+    
+    const monthName = new Date().toLocaleDateString('es-AR', { month: 'long' });
+    
+    return {
+        text: `💰 **Ganancias en ${monthName}:**
+        
+        💵 **Sueldo base:** $${(salaryConfig.baseSalary || 0).toLocaleString('es-AR')}
+        ⭐ **Dinero extra:** $${extraMoney.toLocaleString('es-AR')}
+        🎯 **Total del mes:** $${totalSalary.toLocaleString('es-AR')}
+        
+        📊 **Horas extra:** ${totalOvertime.toFixed(1)}h × $${(salaryConfig.overtimeRate || 0).toLocaleString('es-AR')}
+        
+        ${extraMoney > 0 ? '¡Excelente mes! 🚀' : 'Mes sin extras 😊'}`,
+        chart: {
+            type: 'earnings',
+            data: { base: salaryConfig.baseSalary || 0, extra: extraMoney, total: totalSalary }
+        }
+    };
+}
+
+// Análisis de fines de semana
+function analyzeWeekends() {
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    
+    const weekendRecords = workHistory.filter(record => {
+        const [year, month, day] = record.date.split('-');
+        const recordDate = new Date(year, month - 1, day);
+        const isCurrentMonth = recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
+        const isWeekend = recordDate.getDay() === 0 || recordDate.getDay() === 6;
+        return isCurrentMonth && isWeekend;
+    });
+    
+    const totalWeekendHours = weekendRecords.reduce((sum, record) => sum + (record.totalHours || 0), 0);
+    const weekendDays = weekendRecords.length;
+    
+    const monthName = new Date().toLocaleDateString('es-AR', { month: 'long' });
+    
+    return {
+        text: `🏖️ **Fines de Semana en ${monthName}:**
+        
+        📅 **Días trabajados:** ${weekendDays}
+        🕐 **Total de horas:** ${totalWeekendHours.toFixed(1)}h
+        ⭐ **Todas son horas extra:** ${totalWeekendHours.toFixed(1)}h
+        💰 **Dinero extra:** $${(totalWeekendHours * (salaryConfig.overtimeRate || 0)).toLocaleString('es-AR')}
+        
+        ${weekendDays > 0 ? '¡Dedicación extra! 💪' : 'Sin trabajo en fines de semana 😌'}`,
+        chart: {
+            type: 'weekends',
+            data: weekendRecords.map(r => ({ date: r.date, hours: r.totalHours || 0 }))
+        }
+    };
+}
+
+// Análisis del mejor día
+function analyzeBestDay() {
+    if (workHistory.length === 0) {
+        return {
+            text: '📊 No hay registros de trabajo aún.',
+            chart: null
+        };
+    }
+    
+    const bestDay = workHistory.reduce((best, current) => {
+        return (current.totalHours || 0) > (best.totalHours || 0) ? current : best;
+    });
+    
+    const [year, month, day] = bestDay.date.split('-');
+    const date = new Date(year, month - 1, day);
+    const dayName = date.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+    
+    return {
+        text: `🏆 **Día con Más Horas:**
+        
+        📅 **Fecha:** ${dayName}
+        🕐 **Total trabajado:** ${bestDay.totalHours}h
+        ⭐ **Horas extra:** ${bestDay.overtimeHours}h
+        ${isWeekend ? '🏖️ **Fin de semana**' : '👔 **Día de semana**'}
+        
+        ¡Récord de productividad! 🌟`,
+        chart: null
+    };
+}
+
+// Análisis de promedio
+function analyzeAverage() {
+    if (workHistory.length === 0) {
+        return {
+            text: '📊 No hay registros de trabajo aún.',
+            chart: null
+        };
+    }
+    
+    const totalHours = workHistory.reduce((sum, record) => sum + (record.totalHours || 0), 0);
+    const totalOvertime = workHistory.reduce((sum, record) => sum + (record.overtimeHours || 0), 0);
+    const totalDays = workHistory.length;
+    
+    const avgTotal = (totalHours / totalDays).toFixed(1);
+    const avgOvertime = (totalOvertime / totalDays).toFixed(1);
+    
+    return {
+        text: `📊 **Promedios Generales:**
+        
+        🕐 **Horas por día:** ${avgTotal}h
+        ⭐ **Horas extra por día:** ${avgOvertime}h
+        📅 **Total de días:** ${totalDays}
+        
+        📈 **Totales:**
+        • ${totalHours.toFixed(1)}h trabajadas
+        • ${totalOvertime.toFixed(1)}h extra
+        
+        ¡Buen ritmo de trabajo! 👍`,
+        chart: {
+            type: 'averages',
+            data: { avgTotal: parseFloat(avgTotal), avgOvertime: parseFloat(avgOvertime) }
+        }
+    };
+}
+
+// Generar mini gráfico
+function generateMiniChart(chartData) {
+    if (!chartData) return '';
+    
+    switch (chartData.type) {
+        case 'overtime-monthly':
+            return generateOvertimeChart(chartData.data);
+        case 'work-days':
+            return generateWorkDaysChart(chartData.data);
+        case 'earnings':
+            return generateEarningsChart(chartData.data);
+        case 'weekends':
+            return generateWeekendsChart(chartData.data);
+        case 'averages':
+            return generateAveragesChart(chartData.data);
+        default:
+            return '';
+    }
+}
+
+// Gráfico de horas extra mensuales
+function generateOvertimeChart(data) {
+    if (!data || data.length === 0) return '<p style="text-align: center; color: #999;">Sin datos</p>';
+    
+    const maxHours = Math.max(...data.map(d => d.hours));
+    const bars = data.slice(-7).map(d => {
+        const height = maxHours > 0 ? (d.hours / maxHours) * 80 : 0;
+        const date = new Date(d.date).getDate();
+        return `
+            <div style="display: inline-block; width: 30px; margin: 0 2px; text-align: center;">
+                <div style="height: 80px; display: flex; align-items: end;">
+                    <div style="width: 100%; height: ${height}px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 3px;"></div>
+                </div>
+                <small style="font-size: 10px; color: #666;">${date}</small>
+            </div>
+        `;
+    }).join('');
+    
+    return `
+        <div style="text-align: center; padding: 10px;">
+            <small style="color: #666; font-size: 11px;">Últimos 7 días - Horas extra</small>
+            <div style="margin-top: 10px;">${bars}</div>
+        </div>
+    `;
+}
+
+// Gráfico de días trabajados
+function generateWorkDaysChart(data) {
+    const total = data.total || 0;
+    const overtime = data.overtime || 0;
+    const weekends = data.weekends || 0;
+    
+    return `
+        <div style="display: flex; justify-content: space-around; text-align: center; padding: 10px;">
+            <div>
+                <div style="width: 40px; height: 40px; background: #667eea; border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">${total}</div>
+                <small style="font-size: 10px; color: #666;">Total</small>
+            </div>
+            <div>
+                <div style="width: 40px; height: 40px; background: #764ba2; border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">${overtime}</div>
+                <small style="font-size: 10px; color: #666;">Con extra</small>
+            </div>
+            <div>
+                <div style="width: 40px; height: 40px; background: #ff6b6b; border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">${weekends}</div>
+                <small style="font-size: 10px; color: #666;">Fines</small>
+            </div>
+        </div>
+    `;
+}
+
+// Gráfico de ganancias
+function generateEarningsChart(data) {
+    const base = data.base || 0;
+    const extra = data.extra || 0;
+    const total = data.total || 0;
+    
+    const basePercent = total > 0 ? (base / total) * 100 : 0;
+    const extraPercent = total > 0 ? (extra / total) * 100 : 0;
+    
+    return `
+        <div style="padding: 10px;">
+            <div style="display: flex; height: 20px; border-radius: 10px; overflow: hidden; margin-bottom: 10px;">
+                <div style="width: ${basePercent}%; background: #667eea;"></div>
+                <div style="width: ${extraPercent}%; background: #764ba2;"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 11px;">
+                <span style="color: #667eea;">● Base: ${basePercent.toFixed(0)}%</span>
+                <span style="color: #764ba2;">● Extra: ${extraPercent.toFixed(0)}%</span>
+            </div>
+        </div>
+    `;
+}
+
+// Gráfico de fines de semana
+function generateWeekendsChart(data) {
+    if (!data || data.length === 0) return '<p style="text-align: center; color: #999;">Sin trabajo en fines de semana</p>';
+    
+    const maxHours = Math.max(...data.map(d => d.hours));
+    const bars = data.map(d => {
+        const height = maxHours > 0 ? (d.hours / maxHours) * 60 : 0;
+        const date = new Date(d.date).getDate();
+        return `
+            <div style="display: inline-block; width: 25px; margin: 0 1px; text-align: center;">
+                <div style="height: 60px; display: flex; align-items: end;">
+                    <div style="width: 100%; height: ${height}px; background: #ff6b6b; border-radius: 2px;"></div>
+                </div>
+                <small style="font-size: 9px; color: #666;">${date}</small>
+            </div>
+        `;
+    }).join('');
+    
+    return `
+        <div style="text-align: center; padding: 10px;">
+            <small style="color: #666; font-size: 11px;">Horas en fines de semana</small>
+            <div style="margin-top: 10px; overflow-x: auto;">${bars}</div>
+        </div>
+    `;
+}
+
+// Gráfico de promedios
+function generateAveragesChart(data) {
+    const avgTotal = data.avgTotal || 0;
+    const avgOvertime = data.avgOvertime || 0;
+    
+    const totalHeight = Math.min((avgTotal / 12) * 60, 60); // Max 12 horas
+    const overtimeHeight = Math.min((avgOvertime / 6) * 60, 60); // Max 6 horas extra
+    
+    return `
+        <div style="display: flex; justify-content: space-around; align-items: end; height: 80px; padding: 10px;">
+            <div style="text-align: center;">
+                <div style="width: 30px; height: ${totalHeight}px; background: #667eea; border-radius: 3px; margin: 0 auto;"></div>
+                <small style="font-size: 10px; color: #666; margin-top: 5px; display: block;">${avgTotal}h total</small>
+            </div>
+            <div style="text-align: center;">
+                <div style="width: 30px; height: ${overtimeHeight}px; background: #764ba2; border-radius: 3px; margin: 0 auto;"></div>
+                <small style="font-size: 10px; color: #666; margin-top: 5px; display: block;">${avgOvertime}h extra</small>
+            </div>
+        </div>
+    `;
+}
+
 // Inicialización
 document.addEventListener('DOMContentLoaded', async function() {
     await loadDataFromStorage();
@@ -71,6 +579,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // Configurar sincronización en tiempo real
     setupRealtimeSync();
+    initializeChat();
 });
 
 // Event listeners
