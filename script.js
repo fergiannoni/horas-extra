@@ -67,6 +67,78 @@ const loadFromFirebase = async (collection) => {
 let chatHistory = [];
 let isTyping = false;
 
+// Configuración de Hugging Face
+const HF_API_URL = 'https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium';
+const HF_FALLBACK_URL = 'https://api-inference.huggingface.co/models/facebook/blenderbot-400M-distill';
+
+// Función para consultar Hugging Face
+async function queryHuggingFace(message, context) {
+    try {
+        // Preparar contexto con datos relevantes
+        const contextData = prepareContextData();
+        const prompt = `Contexto: ${contextData}\n\nPregunta del usuario: ${message}\n\nRespuesta:`;
+        
+        const response = await fetch(HF_API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                inputs: prompt,
+                parameters: {
+                    max_length: 200,
+                    temperature: 0.7,
+                    do_sample: true,
+                    return_full_text: false
+                }
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('HF API error');
+        }
+        
+        const result = await response.json();
+        
+        if (result && result[0] && result[0].generated_text) {
+            return {
+                text: result[0].generated_text.trim(),
+                source: 'huggingface',
+                enhanced: true
+            };
+        }
+        
+        throw new Error('No response from HF');
+        
+    } catch (error) {
+        console.log('🔄 Hugging Face no disponible, usando análisis local');
+        return null; // Fallback al sistema local
+    }
+}
+
+// Preparar contexto de datos para la IA
+function prepareContextData() {
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    
+    const monthlyRecords = workHistory.filter(record => {
+        const [year, month, day] = record.date.split('-');
+        const recordDate = new Date(year, month - 1, day);
+        return recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
+    });
+    
+    const totalDays = monthlyRecords.length;
+    const totalOvertime = monthlyRecords.reduce((sum, record) => sum + (record.overtimeHours || 0), 0);
+    const totalEarnings = totalOvertime * (salaryConfig.overtimeRate || 0);
+    const weekendDays = monthlyRecords.filter(r => {
+        const [year, month, day] = r.date.split('-');
+        const date = new Date(year, month - 1, day);
+        return date.getDay() === 0 || date.getDay() === 6;
+    }).length;
+    
+    return `Datos del empleado este mes: ${totalDays} días trabajados, ${totalOvertime.toFixed(1)} horas extra, $${totalEarnings.toLocaleString('es-AR')} dinero extra, ${weekendDays} fines de semana trabajados. Sueldo base: $${(salaryConfig.baseSalary || 0).toLocaleString('es-AR')}, valor hora extra: $${(salaryConfig.overtimeRate || 0).toLocaleString('es-AR')}.`;
+}
+
 // Inicializar chat
 function initializeChat() {
     const chatButton = document.getElementById('chatButton');
@@ -120,12 +192,23 @@ function sendMessage(message) {
     // Mostrar indicador de escritura
     showTypingIndicator();
     
-    // Procesar respuesta (simular delay)
-    setTimeout(() => {
-        const response = processMessage(message);
-        hideTypingIndicator();
-        addMessage(response.text, 'bot', response.chart);
-    }, 1000 + Math.random() * 1000); // 1-2 segundos
+    // Procesar respuesta (async para IA)
+    setTimeout(async () => {
+        try {
+            const response = await processMessage(message);
+            hideTypingIndicator();
+            
+            // Agregar indicador si es respuesta mejorada con IA
+            const enhancedText = response.enhanced 
+                ? response.text 
+                : response.text;
+                
+            addMessage(enhancedText, 'bot', response.chart);
+        } catch (error) {
+            hideTypingIndicator();
+            addMessage('❌ Hubo un error procesando tu pregunta. Inténtalo de nuevo.', 'bot');
+        }
+    }, 800 + Math.random() * 800); // 0.8-1.6 segundos
 }
 
 // Agregar mensaje al chat
@@ -183,9 +266,32 @@ function hideTypingIndicator() {
 }
 
 // Procesar mensaje y generar respuesta
-function processMessage(message) {
+async function processMessage(message) {
     const lowerMessage = message.toLowerCase();
     
+    // Intentar primero con Hugging Face para respuestas más naturales
+    try {
+        const aiResponse = await queryHuggingFace(message);
+        if (aiResponse && aiResponse.enhanced) {
+            // Combinar respuesta de IA con análisis local si es relevante
+            const localAnalysis = getLocalAnalysis(lowerMessage);
+            
+            return {
+                text: `🤖 ${aiResponse.text}${localAnalysis.chart ? '\n\n📊 Aquí tienes los datos específicos:' : ''}`,
+                chart: localAnalysis.chart,
+                enhanced: true
+            };
+        }
+    } catch (error) {
+        console.log('🔄 Usando análisis local');
+    }
+    
+    // Fallback al sistema local original
+    return getLocalAnalysis(lowerMessage);
+}
+
+// Análisis local (sistema original)
+function getLocalAnalysis(lowerMessage) {
     // Patrones de preguntas
     if (lowerMessage.includes('horas extra') && lowerMessage.includes('mes')) {
         return analyzeMonthlyOvertime();
