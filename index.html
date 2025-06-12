@@ -140,6 +140,61 @@
         </section>
     </div>
 
+    <!-- Chat Flotante -->
+    <button class="chat-button" id="chatButton">
+        <i class="fas fa-comments"></i>
+    </button>
+
+    <!-- Modal del Chat -->
+    <div class="chat-modal" id="chatModal">
+        <div class="chat-header">
+            <h3><i class="fas fa-robot"></i> Asistente de Horas</h3>
+            <button class="chat-close" id="chatClose">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div class="chat-suggestions" id="chatSuggestions">
+            <div class="suggestion-chip" data-question="¿Cuántas horas extra este mes?">
+                📊 Horas extra del mes
+            </div>
+            <div class="suggestion-chip" data-question="¿Cuántos días trabajó?">
+                📅 Días trabajados
+            </div>
+            <div class="suggestion-chip" data-question="¿Cuánto dinero extra?">
+                💰 Dinero extra
+            </div>
+            <div class="suggestion-chip" data-question="¿Trabajó fines de semana?">
+                🏖️ Fines de semana
+            </div>
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <div class="chat-message message-bot">
+                <div class="message-bubble">
+                    ¡Hola! 👋 Soy tu asistente de horas extra. Puedes preguntarme sobre:
+                    <br><br>
+                    • Horas trabajadas y extras<br>
+                    • Dinero ganado<br>
+                    • Estadísticas del mes<br>
+                    • Patrones de trabajo<br>
+                    <br>
+                    ¿En qué te puedo ayudar?
+                </div>
+            </div>
+        </div>
+        
+        <div class="chat-input-container">
+            <input 
+                type="text" 
+                class="chat-input" 
+                id="chatInput" 
+                placeholder="Pregúntame sobre las horas de trabajo..."
+                autocomplete="off"
+            >
+        </div>
+    </div>
+
     <script src="script.js"></script>
 </body>
 </html> 
