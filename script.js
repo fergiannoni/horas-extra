@@ -75,7 +75,7 @@ async function queryHuggingFace(message) {
     try {
         // Preparar contexto con datos relevantes
         const contextData = prepareContextData();
-        const prompt = `Eres un asistente amigable y útil. Responde a la siguiente pregunta de manera natural y conversacional. Si la pregunta es sobre trabajo, dinero o horas extra, usa la información del contexto. Si es sobre otro tema, responde normalmente.
+        const prompt = `Eres un asistente amigable y útil. Responde a la siguiente pregunta de manera natural y conversacional. Si la pregunta es sobre trabajo, dinero o horas extra, usa la información del contexto. Si es sobre otro tema, responde normalmente
 
 Contexto del trabajo:
 ${contextData}
@@ -294,20 +294,13 @@ async function processMessage(message) {
         return localAnalysis;
     }
     
-    // Si no es específica de horas extra, intentar con Hugging Face
-    try {
-        const aiResponse = await queryHuggingFace(message);
-        if (aiResponse && aiResponse.enhanced) {
-            // Agregar un "gancho" para volver al tema principal
-            const followUp = getFollowUpQuestion(lowerMessage);
-            
-            return {
-                text: `${aiResponse.text}\n\n${followUp}`,
-                enhanced: true
-            };
-        }
-    } catch (error) {
-        console.log('🔄 Usando respuesta local para pregunta general');
+    // Si no es específica de horas extra, intentar responder basado en el contexto
+    const contextResponse = getContextualResponse(lowerMessage);
+    if (contextResponse) {
+        return {
+            text: contextResponse,
+            enhanced: true
+        };
     }
     
     // Si todo falla, usar respuesta local con gancho
@@ -1252,4 +1245,124 @@ window.debugAndRecalculateWeekends = function() {
 };
 
 // Alias corto para la consola
-window.recalcular = window.debugAndRecalculateWeekends; 
+window.recalcular = window.debugAndRecalculateWeekends;
+
+// Función para generar respuestas contextuales
+function getContextualResponse(message) {
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    const monthName = new Date().toLocaleDateString('es-AR', { month: 'long' });
+    
+    // Preguntas sobre pagos
+    if (message.includes('pagar') || message.includes('pago') || message.includes('cuándo') || message.includes('cuando')) {
+        const monthlyRecords = workHistory.filter(record => {
+            const [year, month, day] = record.date.split('-');
+            const recordDate = new Date(year, month - 1, day);
+            return recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
+        });
+        
+        const totalOvertime = monthlyRecords.reduce((sum, record) => sum + (record.overtimeHours || 0), 0);
+        const totalEarnings = totalOvertime * (salaryConfig.overtimeRate || 0);
+        
+        return `Para ${monthName} tienes que pagar:
+        
+        💰 **Total a pagar:** $${totalEarnings.toLocaleString('es-AR')}
+        ⏰ **Horas extra:** ${totalOvertime.toFixed(1)} horas
+        📅 **Días trabajados:** ${monthlyRecords.length}
+        
+        El pago se realiza al final del mes.`;
+    }
+    
+    // Preguntas sobre trabajo
+    if (message.includes('trabajo') || message.includes('trabajar') || message.includes('horas')) {
+        const monthlyRecords = workHistory.filter(record => {
+            const [year, month, day] = record.date.split('-');
+            const recordDate = new Date(year, month - 1, day);
+            return recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
+        });
+        
+        const totalOvertime = monthlyRecords.reduce((sum, record) => sum + (record.overtimeHours || 0), 0);
+        const weekendDays = monthlyRecords.filter(r => {
+            const [year, month, day] = r.date.split('-');
+            const date = new Date(year, month - 1, day);
+            return date.getDay() === 0 || date.getDay() === 6;
+        }).length;
+        
+        return `Este mes has trabajado:
+        
+        📅 **Días totales:** ${monthlyRecords.length}
+        ⏰ **Horas extra:** ${totalOvertime.toFixed(1)} horas
+        🏖️ **Fines de semana:** ${weekendDays} días
+        
+        ¿Quieres ver más detalles?`;
+    }
+    
+    // Preguntas sobre dinero
+    if (message.includes('dinero') || message.includes('ganar') || message.includes('ganó') || message.includes('ganaste')) {
+        const monthlyRecords = workHistory.filter(record => {
+            const [year, month, day] = record.date.split('-');
+            const recordDate = new Date(year, month - 1, day);
+            return recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
+        });
+        
+        const totalOvertime = monthlyRecords.reduce((sum, record) => sum + (record.overtimeHours || 0), 0);
+        const totalEarnings = totalOvertime * (salaryConfig.overtimeRate || 0);
+        
+        return `Este mes has ganado:
+        
+        💰 **Dinero extra:** $${totalEarnings.toLocaleString('es-AR')}
+        ⏰ **Por:** ${totalOvertime.toFixed(1)} horas extra
+        💵 **Valor hora:** $${(salaryConfig.overtimeRate || 0).toLocaleString('es-AR')}
+        
+        ¿Quieres ver el desglose día por día?`;
+    }
+    
+    // Preguntas sobre niñera
+    if (message.includes('niñera') || message.includes('niñero') || message.includes('cuidado')) {
+        const monthlyRecords = workHistory.filter(record => {
+            const [year, month, day] = record.date.split('-');
+            const recordDate = new Date(year, month - 1, day);
+            return recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
+        });
+        
+        const totalOvertime = monthlyRecords.reduce((sum, record) => sum + (record.overtimeHours || 0), 0);
+        const totalEarnings = totalOvertime * (salaryConfig.overtimeRate || 0);
+        
+        return `Para el cuidado de niños este mes:
+        
+        💰 **Total a pagar:** $${totalEarnings.toLocaleString('es-AR')}
+        ⏰ **Horas trabajadas:** ${totalOvertime.toFixed(1)} horas
+        📅 **Días de servicio:** ${monthlyRecords.length}
+        
+        El pago se realiza al final del mes.`;
+    }
+    
+    // Preguntas generales
+    if (message.includes('hola') || message.includes('buenas') || message.includes('buenos')) {
+        return `¡Hola! 👋 ¿En qué puedo ayudarte hoy? Puedo mostrarte información sobre pagos, horas trabajadas y más.`;
+    }
+    
+    if (message.includes('gracias')) {
+        return `¡De nada! 😊 ¿Hay algo más en lo que pueda ayudarte?`;
+    }
+    
+    if (message.includes('ayuda') || message.includes('puedes')) {
+        return `¡Claro! Puedo ayudarte con:
+
+        💰 **Pagos y dinero:**
+        • "¿Cuánto tengo que pagar este mes?"
+        • "¿Cuánto he ganado?"
+        
+        ⏰ **Horas y trabajo:**
+        • "¿Cuántas horas he trabajado?"
+        • "¿Cuántos días de servicio?"
+        
+        📊 **Estadísticas:**
+        • "¿Cuál es mi mejor día?"
+        • "¿Cuántos fines de semana?"
+
+        ¿Qué te gustaría saber?`;
+    }
+    
+    return null;
+} 
