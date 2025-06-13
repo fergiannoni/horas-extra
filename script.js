@@ -68,14 +68,27 @@ let chatHistory = [];
 let isTyping = false;
 
 // Configuración de Hugging Face
-const HF_API_URL = 'https://api-inference.huggingface.co/models/facebook/blenderbot-400M-distill';
+const HF_API_URL = 'https://api-inference.huggingface.co/models/google/flan-t5-large';
 
 // Función para consultar Hugging Face
 async function queryHuggingFace(message) {
     try {
         // Preparar contexto con datos relevantes
         const contextData = prepareContextData();
-        const prompt = `Contexto: ${contextData}\n\nPregunta del usuario: ${message}\n\nRespuesta:`;
+        const prompt = `Eres un asistente amigable y útil. Responde a la siguiente pregunta de manera natural y conversacional. Si la pregunta es sobre trabajo, dinero o horas extra, usa la información del contexto. Si es sobre otro tema, responde normalmente.
+
+Contexto del trabajo:
+${contextData}
+
+Pregunta: ${message}
+
+Instrucciones:
+1. Si la pregunta es sobre trabajo o dinero, incluye información relevante del contexto
+2. Si es sobre otro tema, responde de manera general
+3. Sé amigable y conversacional
+4. Si no sabes algo, admítelo amablemente
+
+Respuesta:`;
         
         const response = await fetch(HF_API_URL, {
             method: 'POST',
@@ -85,10 +98,11 @@ async function queryHuggingFace(message) {
             body: JSON.stringify({
                 inputs: prompt,
                 parameters: {
-                    max_length: 150,
+                    max_length: 250,
                     temperature: 0.7,
                     do_sample: true,
-                    return_full_text: false
+                    return_full_text: false,
+                    top_p: 0.9
                 }
             })
         });
@@ -135,7 +149,13 @@ function prepareContextData() {
         return date.getDay() === 0 || date.getDay() === 6;
     }).length;
     
-    return `Datos del empleado este mes: ${totalDays} días trabajados, ${totalOvertime.toFixed(1)} horas extra, $${totalEarnings.toLocaleString('es-AR')} dinero extra, ${weekendDays} fines de semana trabajados. Sueldo base: $${(salaryConfig.baseSalary || 0).toLocaleString('es-AR')}, valor hora extra: $${(salaryConfig.overtimeRate || 0).toLocaleString('es-AR')}.`;
+    return `Información del trabajo este mes:
+- Días trabajados: ${totalDays}
+- Horas extra: ${totalOvertime.toFixed(1)} horas
+- Dinero extra ganado: $${totalEarnings.toLocaleString('es-AR')}
+- Fines de semana trabajados: ${weekendDays}
+- Sueldo base: $${(salaryConfig.baseSalary || 0).toLocaleString('es-AR')}
+- Valor hora extra: $${(salaryConfig.overtimeRate || 0).toLocaleString('es-AR')}`;
 }
 
 // Inicializar chat
@@ -308,7 +328,8 @@ function getFollowUpQuestion(message) {
     ];
     
     // Si la pregunta es sobre dinero o trabajo, usar un follow-up más específico
-    if (message.includes('dinero') || message.includes('pago') || message.includes('ganar')) {
+    if (message.includes('dinero') || message.includes('pago') || message.includes('ganar') || 
+        message.includes('niñera') || message.includes('pagar') || message.includes('costo')) {
         return "¿Te gustaría ver un resumen de tus ganancias por horas extra?";
     }
     
