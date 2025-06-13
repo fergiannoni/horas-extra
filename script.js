@@ -68,11 +68,10 @@ let chatHistory = [];
 let isTyping = false;
 
 // Configuración de Hugging Face
-const HF_API_URL = 'https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium';
-const HF_FALLBACK_URL = 'https://api-inference.huggingface.co/models/facebook/blenderbot-400M-distill';
+const HF_API_URL = 'https://api-inference.huggingface.co/models/facebook/blenderbot-400M-distill';
 
 // Función para consultar Hugging Face
-async function queryHuggingFace(message, context) {
+async function queryHuggingFace(message) {
     try {
         // Preparar contexto con datos relevantes
         const contextData = prepareContextData();
@@ -86,7 +85,7 @@ async function queryHuggingFace(message, context) {
             body: JSON.stringify({
                 inputs: prompt,
                 parameters: {
-                    max_length: 200,
+                    max_length: 150,
                     temperature: 0.7,
                     do_sample: true,
                     return_full_text: false
@@ -95,7 +94,8 @@ async function queryHuggingFace(message, context) {
         });
         
         if (!response.ok) {
-            throw new Error('HF API error');
+            console.log('❌ Error en API de Hugging Face:', response.status);
+            return null;
         }
         
         const result = await response.json();
@@ -103,16 +103,15 @@ async function queryHuggingFace(message, context) {
         if (result && result[0] && result[0].generated_text) {
             return {
                 text: result[0].generated_text.trim(),
-                source: 'huggingface',
                 enhanced: true
             };
         }
         
-        throw new Error('No response from HF');
+        return null;
         
     } catch (error) {
-        console.log('🔄 Hugging Face no disponible, usando análisis local');
-        return null; // Fallback al sistema local
+        console.log('🔄 Error con Hugging Face:', error.message);
+        return null;
     }
 }
 
@@ -269,65 +268,128 @@ function hideTypingIndicator() {
 async function processMessage(message) {
     const lowerMessage = message.toLowerCase();
     
-    // Intentar primero con Hugging Face para respuestas más naturales
+    // Primero verificar si es una pregunta específica de horas extra
+    const localAnalysis = getLocalAnalysis(lowerMessage);
+    if (localAnalysis && !localAnalysis.isGeneral) {
+        return localAnalysis;
+    }
+    
+    // Si no es específica de horas extra, intentar con Hugging Face
     try {
         const aiResponse = await queryHuggingFace(message);
         if (aiResponse && aiResponse.enhanced) {
-            // Combinar respuesta de IA con análisis local si es relevante
-            const localAnalysis = getLocalAnalysis(lowerMessage);
+            // Agregar un "gancho" para volver al tema principal
+            const followUp = getFollowUpQuestion(lowerMessage);
             
             return {
-                text: `🤖 ${aiResponse.text}${localAnalysis.chart ? '\n\n📊 Aquí tienes los datos específicos:' : ''}`,
-                chart: localAnalysis.chart,
+                text: `${aiResponse.text}\n\n${followUp}`,
                 enhanced: true
             };
         }
     } catch (error) {
-        console.log('🔄 Usando análisis local');
+        console.log('🔄 Usando respuesta local para pregunta general');
     }
     
-    // Fallback al sistema local original
-    return getLocalAnalysis(lowerMessage);
+    // Si todo falla, usar respuesta local con gancho
+    return {
+        text: `${localAnalysis.text}\n\n${getFollowUpQuestion(lowerMessage)}`,
+        enhanced: false
+    };
+}
+
+// Función para generar preguntas de seguimiento relacionadas con horas extra
+function getFollowUpQuestion(message) {
+    const followUps = [
+        "¿Te gustaría saber cuántas horas extra has trabajado este mes?",
+        "¿Quieres que te muestre un resumen de tus ganancias?",
+        "¿Necesitas ayuda con el cálculo de tus horas trabajadas?",
+        "¿Te interesa ver tus estadísticas de trabajo?",
+        "¿Quieres que te ayude a organizar tus horas extra?"
+    ];
+    
+    // Si la pregunta es sobre dinero o trabajo, usar un follow-up más específico
+    if (message.includes('dinero') || message.includes('pago') || message.includes('ganar')) {
+        return "¿Te gustaría ver un resumen de tus ganancias por horas extra?";
+    }
+    
+    if (message.includes('trabajo') || message.includes('trabajar') || message.includes('horas')) {
+        return "¿Quieres que te muestre un análisis de tus horas trabajadas?";
+    }
+    
+    // Seleccionar un follow-up aleatorio
+    return followUps[Math.floor(Math.random() * followUps.length)];
 }
 
 // Análisis local (sistema original)
 function getLocalAnalysis(lowerMessage) {
-    // Patrones de preguntas
+    // Patrones de preguntas específicas de horas extra
     if (lowerMessage.includes('horas extra') && lowerMessage.includes('mes')) {
-        return analyzeMonthlyOvertime();
+        return { ...analyzeMonthlyOvertime(), isGeneral: false };
     }
     
     if (lowerMessage.includes('días') && (lowerMessage.includes('trabajó') || lowerMessage.includes('trabajo'))) {
-        return analyzeWorkDays();
+        return { ...analyzeWorkDays(), isGeneral: false };
     }
     
     if (lowerMessage.includes('dinero') || lowerMessage.includes('pago') || lowerMessage.includes('ganó')) {
-        return analyzeEarnings();
+        return { ...analyzeEarnings(), isGeneral: false };
     }
     
     if (lowerMessage.includes('fin de semana') || lowerMessage.includes('sábado') || lowerMessage.includes('domingo')) {
-        return analyzeWeekends();
+        return { ...analyzeWeekends(), isGeneral: false };
     }
     
     if (lowerMessage.includes('día') && (lowerMessage.includes('más') || lowerMessage.includes('mayor'))) {
-        return analyzeBestDay();
+        return { ...analyzeBestDay(), isGeneral: false };
     }
     
     if (lowerMessage.includes('promedio')) {
-        return analyzeAverage();
+        return { ...analyzeAverage(), isGeneral: false };
+    }
+
+    // Preguntas generales o saludos
+    if (lowerMessage.includes('hola') || lowerMessage.includes('buenas') || lowerMessage.includes('buenos')) {
+        return {
+            text: `¡Hola! 👋 ¿En qué puedo ayudarte hoy? Puedo responder sobre tus horas extra, días trabajados, ganancias y más.`,
+            chart: null,
+            isGeneral: true
+        };
+    }
+
+    if (lowerMessage.includes('gracias')) {
+        return {
+            text: `¡De nada! 😊 ¿Hay algo más en lo que pueda ayudarte?`,
+            chart: null,
+            isGeneral: true
+        };
+    }
+
+    if (lowerMessage.includes('ayuda') || lowerMessage.includes('puedes')) {
+        return {
+            text: `¡Claro! Puedo ayudarte con:
+
+            📊 **Análisis de trabajo:**
+            • Horas extra y días trabajados
+            • Ganancias y pagos
+            • Fines de semana
+            • Promedios y estadísticas
+
+            💡 **Preguntas generales:**
+            • "¿Cómo va tu día?"
+            • "¿Qué tal el trabajo?"
+            • "¿Necesitas ayuda?"
+
+            ¿Qué te gustaría saber?`,
+            chart: null,
+            isGeneral: true
+        };
     }
     
-    // Respuesta por defecto
+    // Respuesta por defecto más amigable
     return {
-        text: `🤔 No estoy seguro de cómo responder esa pregunta. Puedes preguntarme sobre:
-        
-        • "¿Cuántas horas extra este mes?"
-        • "¿Cuántos días trabajó?"
-        • "¿Cuánto dinero extra ganó?"
-        • "¿Trabajó fines de semana?"
-        • "¿Cuál fue su mejor día?"
-        • "¿Cuál es el promedio de horas?"`,
-        chart: null
+        text: `Entiendo tu pregunta. Aunque soy especialista en horas extra, puedo ayudarte con cualquier tema. ¿Qué te gustaría saber?`,
+        chart: null,
+        isGeneral: true
     };
 }
 
