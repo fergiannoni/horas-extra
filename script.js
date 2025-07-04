@@ -1366,3 +1366,103 @@ function getContextualResponse(message) {
     
     return null;
 } 
+// --- Filtro de meses para el resumen mensual ---
+function populateMonthFilterResumen() {
+    const monthFilterResumen = document.getElementById('monthFilterResumen');
+    if (!monthFilterResumen) return;
+    // Limpiar opciones
+    monthFilterResumen.innerHTML = '';
+    // Obtener todos los meses únicos del historial
+    const months = new Set();
+    workHistory.forEach(record => {
+        const [year, month] = record.date.split('-');
+        months.add(`${year}-${month}`);
+    });
+    // Ordenar y limitar a los últimos 12 meses
+    const sortedMonths = Array.from(months).sort().reverse().slice(0, 12);
+    sortedMonths.forEach(monthKey => {
+        const [year, month] = monthKey.split('-');
+        const date = new Date(year, month - 1);
+        const monthName = date.toLocaleDateString('es-AR', { year: 'numeric', month: 'long' });
+        const option = document.createElement('option');
+        option.value = monthKey;
+        option.textContent = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+        monthFilterResumen.appendChild(option);
+    });
+    // Seleccionar el mes actual por defecto
+    const today = new Date();
+    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    if (monthFilterResumen.querySelector(`option[value="${currentMonth}"]`)) {
+        monthFilterResumen.value = currentMonth;
+    }
+}
+
+// --- Actualizar resumen mensual según el filtro ---
+function updateMonthlySummaryFiltered() {
+    const monthFilterResumen = document.getElementById('monthFilterResumen');
+    if (!monthFilterResumen) return;
+    const selectedMonth = monthFilterResumen.value;
+    if (!selectedMonth) return;
+
+    const [year, month] = selectedMonth.split('-');
+    const currentMonthRecords = workHistory.filter(record => {
+        const [recordYear, recordMonth] = record.date.split('-');
+        return recordYear == year && recordMonth == month;
+    });
+
+    const totalDays = currentMonthRecords.length;
+    const normalHours = salaryConfig.normalHours || 8;
+
+    // Calcular horas normales excluyendo fines de semana
+    const totalNormalHours = currentMonthRecords.reduce((sum, record) => {
+        const [year, month, day] = record.date.split('-');
+        const dateObj = new Date(year, month - 1, day);
+        const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+        if (isWeekend) {
+            return sum;
+        } else {
+            return sum + Math.min(record.totalHours, normalHours);
+        }
+    }, 0);
+
+    const totalOvertimeHours = currentMonthRecords.reduce((sum, record) => 
+        sum + record.overtimeHours, 0);
+
+    const totalSalary = salaryConfig.baseSalary + (totalOvertimeHours * salaryConfig.overtimeRate);
+
+    document.getElementById('totalDays').textContent = totalDays;
+    document.getElementById('totalNormalHours').textContent = Math.round(totalNormalHours * 100) / 100;
+    document.getElementById('totalOvertimeHours').textContent = Math.round(totalOvertimeHours * 100) / 100;
+    document.getElementById('totalSalary').textContent = `$${totalSalary.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
+}
+
+// --- Sincronizar filtros ---
+document.addEventListener('DOMContentLoaded', function() {
+    // Llamar a la función original de script.js
+    if (typeof loadDataFromStorage === 'function') {
+        loadDataFromStorage().then(() => {
+            populateMonthFilterResumen();
+            updateMonthlySummaryFiltered();
+        });
+    } else {
+        populateMonthFilterResumen();
+        updateMonthlySummaryFiltered();
+    }
+    // Actualizar resumen cuando cambia el filtro
+    document.getElementById('monthFilterResumen').addEventListener('change', updateMonthlySummaryFiltered);
+});
+
+// Actualizar el filtro de meses cuando cambia el historial
+function updateResumenMonthFilterOnHistoryChange() {
+    populateMonthFilterResumen();
+    updateMonthlySummaryFiltered();
+}
+
+// Sobrescribir updateDisplay para que también actualice el filtro de resumen
+if (typeof updateDisplay === 'function') {
+    const originalUpdateDisplay = updateDisplay;
+    window.updateDisplay = function() {
+        originalUpdateDisplay();
+        updateResumenMonthFilterOnHistoryChange();
+    }
+}
