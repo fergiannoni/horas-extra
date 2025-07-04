@@ -99,6 +99,11 @@
             const [workHistory, setWorkHistory] = useState([]);
             const [modalOpen, setModalOpen] = useState(false);
             const [modalType, setModalType] = useState('');
+            const [selectedMonth, setSelectedMonth] = useState(() => {
+                // Por defecto, mostrar el mes actual
+                const now = new Date();
+                return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            });
 
             // Actualizar hora cada segundo
             useEffect(() => {
@@ -405,6 +410,65 @@
                 });
             };
 
+            // Generar opciones de meses (últimos 12 meses)
+            const generateMonthOptions = () => {
+                const options = [];
+                const now = new Date();
+                
+                for (let i = 0; i < 12; i++) {
+                    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const value = `${year}-${month}`;
+                    const label = date.toLocaleDateString('es-AR', { 
+                        year: 'numeric', 
+                        month: 'long' 
+                    });
+                    
+                    options.push({ value, label });
+                }
+                
+                return options;
+            };
+
+            // Calcular resumen del mes seleccionado
+            const calculateMonthlySummary = () => {
+                if (!workHistory.length) return null;
+                
+                const [selectedYear, selectedMonth] = selectedMonth.split('-');
+                const monthRecords = workHistory.filter(record => {
+                    const [year, month, day] = record.date.split('-');
+                    const recordDate = new Date(year, month - 1, day);
+                    return recordDate.getFullYear() == selectedYear && 
+                           recordDate.getMonth() == (selectedMonth - 1);
+                });
+                
+                if (monthRecords.length === 0) return null;
+                
+                const totalDays = monthRecords.length;
+                const totalHours = monthRecords.reduce((sum, record) => sum + (record.totalHours || 0), 0);
+                const totalOvertime = monthRecords.reduce((sum, record) => sum + (record.overtimeHours || 0), 0);
+                const totalEarnings = totalOvertime * (salaryConfig.overtimeRate || 0);
+                
+                // Calcular días de fin de semana
+                const weekendDays = monthRecords.filter(record => {
+                    const [year, month, day] = record.date.split('-');
+                    const date = new Date(year, month - 1, day);
+                    return date.getDay() === 0 || date.getDay() === 6;
+                }).length;
+                
+                return {
+                    totalDays,
+                    totalHours: Math.round(totalHours * 100) / 100,
+                    totalOvertime: Math.round(totalOvertime * 100) / 100,
+                    totalEarnings,
+                    weekendDays,
+                    averageHoursPerDay: totalDays > 0 ? Math.round((totalHours / totalDays) * 100) / 100 : 0
+                };
+            };
+
+            const monthlySummary = calculateMonthlySummary();
+
             return (
                 <div className="min-h-screen p-4">
                     <div className="max-w-4xl mx-auto">
@@ -482,12 +546,98 @@
                             </div>
                         </div>
 
+                        {/* Resumen Mensual */}
+                        <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
+                            <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+                                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                                    <i className="fas fa-chart-bar text-purple-500"></i>
+                                    Resumen Mensual
+                                </h2>
+                                
+                                {/* Filtro de meses */}
+                                <div className="mt-4 md:mt-0">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Seleccionar Mes:
+                                    </label>
+                                    <select
+                                        value={selectedMonth}
+                                        onChange={(e) => setSelectedMonth(e.target.value)}
+                                        className="w-full md:w-auto px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white text-gray-700 font-medium"
+                                    >
+                                        {generateMonthOptions().map((option) => (
+                                            <option key={option.value} value={option.value}>
+                                                {option.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            {monthlySummary ? (
+                                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <div className="text-center p-4 bg-blue-50 rounded-xl">
+                                        <div className="text-blue-600 text-lg font-semibold mb-1">Días Trabajados</div>
+                                        <div className="text-3xl font-bold text-gray-800">{monthlySummary.totalDays}</div>
+                                        <div className="text-sm text-gray-600 mt-1">
+                                            {monthlySummary.weekendDays} fines de semana
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="text-center p-4 bg-green-50 rounded-xl">
+                                        <div className="text-green-600 text-lg font-semibold mb-1">Horas Totales</div>
+                                        <div className="text-3xl font-bold text-gray-800">{monthlySummary.totalHours}h</div>
+                                        <div className="text-sm text-gray-600 mt-1">
+                                            {monthlySummary.averageHoursPerDay}h promedio/día
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="text-center p-4 bg-purple-50 rounded-xl">
+                                        <div className="text-purple-600 text-lg font-semibold mb-1">Horas Extra</div>
+                                        <div className="text-3xl font-bold text-gray-800">{monthlySummary.totalOvertime}h</div>
+                                        <div className="text-sm text-gray-600 mt-1">
+                                            {salaryConfig.overtimeRate ? `$${salaryConfig.overtimeRate}/h` : 'Sin tarifa configurada'}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="text-center p-4 bg-yellow-50 rounded-xl">
+                                        <div className="text-yellow-600 text-lg font-semibold mb-1">Total a Pagar</div>
+                                        <div className="text-3xl font-bold text-gray-800">
+                                            ${monthlySummary.totalEarnings.toLocaleString('es-AR')}
+                                        </div>
+                                        <div className="text-sm text-gray-600 mt-1">
+                                            Por horas extra
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-center py-8 text-gray-500">
+                                    <i className="fas fa-calendar-times text-4xl mb-4 text-gray-300"></i>
+                                    <p className="text-lg">No hay registros para este mes</p>
+                                    <p className="text-sm">Selecciona otro mes o agrega registros de trabajo</p>
+                                </div>
+                            )}
+                        </div>
+
                         {/* Historial */}
                         <div className="bg-white rounded-2xl shadow-lg p-6">
-                            <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                                <i className="fas fa-history text-purple-500"></i>
-                                Historial de Trabajo
-                            </h2>
+                            <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
+                                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                                    <i className="fas fa-history text-purple-500"></i>
+                                    Historial de Trabajo
+                                </h2>
+                                
+                                <div className="mt-2 md:mt-0 text-sm text-gray-600">
+                                    {monthlySummary ? (
+                                        <span>
+                                            Mostrando {monthlySummary.totalDays} registros del mes seleccionado
+                                        </span>
+                                    ) : (
+                                        <span>
+                                            Mostrando todos los registros ({workHistory.length} total)
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
                             
                             <div className="overflow-x-auto">
                                 <table className="w-full">
@@ -497,31 +647,64 @@
                                             <th className="text-left py-3 px-2 font-semibold text-gray-700">Entrada</th>
                                             <th className="text-left py-3 px-2 font-semibold text-gray-700">Salida</th>
                                             <th className="text-left py-3 px-2 font-semibold text-gray-700">Horas Extra</th>
+                                            <th className="text-left py-3 px-2 font-semibold text-gray-700">Total</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {workHistory.length === 0 ? (
-                                            <tr>
-                                                <td colSpan="4" className="text-center py-8 text-gray-500 italic">
-                                                    No hay registros aún
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            workHistory.slice().reverse().map((record, index) => (
-                                                                                                 <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
-                                                     <td className="py-3 px-2">{formatDate(record.date)}</td>
-                                                     <td className="py-3 px-2 font-medium text-green-600">
-                                                         {record.entryTime || record.startTime || '--:--'}
-                                                     </td>
-                                                     <td className="py-3 px-2 font-medium text-blue-600">
-                                                         {record.exitTime || record.endTime || '--:--'}
-                                                     </td>
-                                                     <td className="py-3 px-2 font-bold text-purple-600">
-                                                         {record.overtimeHours || 0}h
-                                                     </td>
-                                                 </tr>
-                                            ))
-                                        )}
+                                        {(() => {
+                                            // Filtrar registros por mes seleccionado
+                                            const [selectedYear, selectedMonth] = selectedMonth.split('-');
+                                            const filteredHistory = workHistory.filter(record => {
+                                                const [year, month, day] = record.date.split('-');
+                                                const recordDate = new Date(year, month - 1, day);
+                                                return recordDate.getFullYear() == selectedYear && 
+                                                       recordDate.getMonth() == (selectedMonth - 1);
+                                            });
+                                            
+                                            if (filteredHistory.length === 0) {
+                                                return (
+                                                    <tr>
+                                                        <td colSpan="5" className="text-center py-8 text-gray-500 italic">
+                                                            No hay registros para este mes
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            }
+                                            
+                                            return filteredHistory.slice().reverse().map((record, index) => {
+                                                // Verificar si es fin de semana
+                                                const [year, month, day] = record.date.split('-');
+                                                const date = new Date(year, month - 1, day);
+                                                const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                                                
+                                                return (
+                                                    <tr key={index} className={`border-b border-gray-100 hover:bg-gray-50 ${isWeekend ? 'bg-yellow-50' : ''}`}>
+                                                        <td className="py-3 px-2">
+                                                            <div className="flex items-center gap-2">
+                                                                {formatDate(record.date)}
+                                                                {isWeekend && (
+                                                                    <span className="text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded-full">
+                                                                        Fin de semana
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-3 px-2 font-medium text-green-600">
+                                                            {record.entryTime || record.startTime || '--:--'}
+                                                        </td>
+                                                        <td className="py-3 px-2 font-medium text-blue-600">
+                                                            {record.exitTime || record.endTime || '--:--'}
+                                                        </td>
+                                                        <td className="py-3 px-2 font-bold text-purple-600">
+                                                            {record.overtimeHours || 0}h
+                                                        </td>
+                                                        <td className="py-3 px-2 font-medium text-gray-700">
+                                                            {record.totalHours || 0}h
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            });
+                                        })()}
                                     </tbody>
                                 </table>
                             </div>
